@@ -14,7 +14,7 @@ const VerifiedDoctors = ({doctors}) => {
   const [searchTerm,setSearchTerm]=useState("")
   const[targetDoctor,setTargetDoctor]=useState(null)
   const {data,loading, fn:submitStatusUpdate}=useFetch(updateDoctorActiveStatus)
-  console.log(doctors)
+
   const filteredDoctors=doctors.filter((doctor)=>{
     const query=searchTerm.toLowerCase()
     return (

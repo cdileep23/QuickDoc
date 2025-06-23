@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 
 const Page = () => {
+  console.log("spppppppppppppppppppppppppppp")
   return (
     <div>
       <div className="flex flex-col items-center justify-center gap-3 mb-4">

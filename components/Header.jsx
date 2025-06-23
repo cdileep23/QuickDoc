@@ -22,7 +22,7 @@ const Header = async() => {
 
   return (
     <header className="fixed top-0 w-full border-b backdrop-blur-md z-10 supports-[backdrop-filter]:bg-background/50">
-      <nav className="container mx-auto px-4 h-16 flex items-center justify-between">
+      <nav className="container max-w-7xl mx-auto sm:px-10 h-16 flex items-center justify-between">
         <Link href="/" className="font-bold text-2xl">
           Quick Doc
         </Link>
@@ -87,30 +87,7 @@ const Header = async() => {
               </Link>
             )}
           </SignedIn>
-          {(!user || user?.role !== "ADMIN") && (
-            <Link href={user?.role === "PATIENT" ? "/pricing" : "/doctor"}>
-              <Badge
-                variant="outline"
-                className="h-9 px-3 py-1 flex items-center gap-2"
-              >
-                <CreditCard className="h-3.5 w-3.5 text-blue-400" />
-                <span className="text-blue-400">
-                  {user && user.role !== "ADMIN" ? (
-                    <>
-                      {user.credits}{" "}
-                      <span className="hidden md:inline">
-                        {user?.role === "PATIENT"
-                          ? "Credits"
-                          : "Earned Credits"}
-                      </span>
-                    </>
-                  ) : (
-                    <>Pricing</>
-                  )}
-                </span>
-              </Badge>
-            </Link>
-          )}
+          
           <SignedOut>
             <div className="flex items-center gap-4">
               <SignInButton>

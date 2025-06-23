@@ -1,6 +1,16 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* hide scrollbar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
 
+.no-scrollbar {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
 @custom-variant dark (&:is(.dark *));
 .clerk-pricing-table {
   flex-direction: row !important;

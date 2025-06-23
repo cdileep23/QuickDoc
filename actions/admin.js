@@ -73,6 +73,8 @@ export async function updateDoctorStatus({ doctorId, status }) {
   if (!isAdmin) {
     throw new Error("Unauthorized");
   }
+console.log(doctorId)
+  console.log(status)
  
   if (!doctorId || !["VERIFIED", "REJECTED"].includes(status)) {
     throw new Error("Invalid Input");

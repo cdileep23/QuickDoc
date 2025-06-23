@@ -41,7 +41,10 @@ if(data &&data?.success){
       </CardHeader>
       <CardContent>
         {doctors.length === 0 ? (
-          <div className='w-full'> No Pending Verification requests at this time</div>
+          <div className="w-full">
+            {" "}
+            No Pending Verification requests at this time
+          </div>
         ) : (
           <div className="space-y-4">
             {doctors.map((doctor) => (
@@ -197,7 +200,7 @@ if(data &&data?.success){
                             variant="destructive"
                             onClick={() =>
                               submitStatusUpdate({
-                                id: selectedDoctor.id,
+                                doctorId: selectedDoctor.id,
                                 status: "REJECTED",
                               })
                             }

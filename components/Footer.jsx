@@ -15,31 +15,7 @@ const Footer = () => {
         </div>
 
         {/* Navigation */}
-        <div>
-          <h3 className="font-semibold mb-2">Quick Links</h3>
-          <ul className="space-y-1 text-sm">
-            <li>
-              <a href="#how-it-works" className="hover:text-blue-600">
-                How It Works
-              </a>
-            </li>
-            <li>
-              <a href="#pricing" className="hover:text-blue-600">
-                Consultation Packages
-              </a>
-            </li>
-            <li>
-              <a href="#credits" className="hover:text-blue-600">
-                Credit System
-              </a>
-            </li>
-            <li>
-              <a href="#contact" className="hover:text-blue-600">
-                Contact
-              </a>
-            </li>
-          </ul>
-        </div>
+      
 
         {/* Contact Info */}
         <div>
@@ -57,20 +33,7 @@ const Footer = () => {
         </div>
 
         {/* Social Links */}
-        <div>
-          <h3 className="font-semibold mb-2">Follow Us</h3>
-          <div className="flex gap-4">
-            <a href="#" aria-label="Facebook">
-              <Facebook className="w-5 h-5 hover:text-blue-600" />
-            </a>
-            <a href="#" aria-label="Twitter">
-              <Twitter className="w-5 h-5 hover:text-blue-600" />
-            </a>
-            <a href="#" aria-label="Instagram">
-              <Instagram className="w-5 h-5 hover:text-blue-600" />
-            </a>
-          </div>
-        </div>
+       
       </div>
 
       <div className="border-t mt-10 pt-6 text-center text-sm text-gray-500">
