@@ -25,6 +25,7 @@ export default function VideoCall({ sessionId, token }) {
 
   const sessionRef = useRef(null);
   const publisherRef = useRef(null);
+  const isCleaningUpRef = useRef(false);
 
   const router = useRouter();
 
@@ -41,6 +42,52 @@ export default function VideoCall({ sessionId, token }) {
     initializeSession();
   };
 
+  // Complete cleanup function
+  const cleanupSession = async () => {
+    if (isCleaningUpRef.current) return;
+    isCleaningUpRef.current = true;
+
+    console.log("Starting cleanup...");
+
+    try {
+      // Stop publisher first
+      if (publisherRef.current) {
+        console.log("Destroying publisher...");
+        // Stop publishing before destroying
+        if (sessionRef.current) {
+          sessionRef.current.unpublish(publisherRef.current);
+        }
+        publisherRef.current.destroy();
+        publisherRef.current = null;
+      }
+
+      // Disconnect and destroy session
+      if (sessionRef.current) {
+        console.log("Disconnecting session...");
+
+        // Remove all event listeners to prevent memory leaks
+        sessionRef.current.off();
+
+        // Force disconnect if still connected
+        if (sessionRef.current.connection) {
+          sessionRef.current.forceDisconnect();
+        } else {
+          sessionRef.current.disconnect();
+        }
+
+        sessionRef.current = null;
+      }
+
+      // Reset states
+      setIsConnected(false);
+      setIsLoading(false);
+    } catch (error) {
+      console.error("Error during cleanup:", error);
+    } finally {
+      isCleaningUpRef.current = false;
+    }
+  };
+
   // Initialize video session
   const initializeSession = () => {
     if (!appId || !sessionId || !token) {
@@ -49,7 +96,7 @@ export default function VideoCall({ sessionId, token }) {
       return;
     }
 
-    console.log({ appId, sessionId, token });
+    console.log("Initializing session...", { appId, sessionId, token });
 
     try {
       // Initialize the session
@@ -57,34 +104,43 @@ export default function VideoCall({ sessionId, token }) {
 
       // Subscribe to new streams
       sessionRef.current.on("streamCreated", (event) => {
-        console.log(event, "New stream created");
+        console.log("New stream created:", event);
 
-        sessionRef.current.subscribe(
+        const subscriber = sessionRef.current.subscribe(
           event.stream,
           "subscriber",
           {
-            insertMode: "append",
+            insertMode: "replace",
             width: "100%",
             height: "100%",
           },
           (error) => {
             if (error) {
+              console.error("Subscriber error:", error);
               toast.error("Error connecting to other participant's stream");
+            } else {
+              console.log("Successfully subscribed to remote stream");
             }
           }
         );
       });
 
+      // Handle stream destroyed
+      sessionRef.current.on("streamDestroyed", (event) => {
+        console.log("Stream destroyed:", event);
+      });
+
       // Handle session events
-      sessionRef.current.on("sessionConnected", () => {
+      sessionRef.current.on("sessionConnected", (event) => {
+        console.log("Session connected:", event);
         setIsConnected(true);
         setIsLoading(false);
 
-        // THIS IS THE FIX - Initialize publisher AFTER session connects
+        // Initialize publisher AFTER session connects
         publisherRef.current = window.OT.initPublisher(
-          "publisher", // This targets the div with id="publisher"
+          "publisher",
           {
-            insertMode: "replace", // Change from "append" to "replace"
+            insertMode: "replace",
             width: "100%",
             height: "100%",
             publishAudio: isAudioEnabled,
@@ -95,37 +151,57 @@ export default function VideoCall({ sessionId, token }) {
               console.error("Publisher error:", error);
               toast.error("Error initializing your camera and microphone");
             } else {
-              console.log(
-                "Publisher initialized successfully - you should see your video now"
+              console.log("Publisher initialized successfully");
+
+              // Publish the stream
+              sessionRef.current.publish(
+                publisherRef.current,
+                (publishError) => {
+                  if (publishError) {
+                    console.error("Error publishing stream:", publishError);
+                    toast.error("Error publishing your stream");
+                  } else {
+                    console.log("Stream published successfully");
+                  }
+                }
               );
             }
           }
         );
       });
 
-      sessionRef.current.on("sessionDisconnected", () => {
+      sessionRef.current.on("sessionDisconnected", (event) => {
+        console.log("Session disconnected:", event);
         setIsConnected(false);
+
+        // Clean up references when session disconnects
+        if (publisherRef.current) {
+          publisherRef.current.destroy();
+          publisherRef.current = null;
+        }
+      });
+
+      // Handle connection errors
+      sessionRef.current.on("connectionCreated", (event) => {
+        console.log("Connection created:", event);
+      });
+
+      sessionRef.current.on("connectionDestroyed", (event) => {
+        console.log("Connection destroyed:", event);
       });
 
       // Connect to the session
       sessionRef.current.connect(token, (error) => {
         if (error) {
-          toast.error("Error connecting to video session");
+          console.error("Session connection error:", error);
+          toast.error(`Error connecting to video session: ${error.message}`);
+          setIsLoading(false);
         } else {
-          // Publish your stream AFTER connecting
-          if (publisherRef.current) {
-            sessionRef.current.publish(publisherRef.current, (error) => {
-              if (error) {
-                console.log("Error publishing stream:", error);
-                toast.error("Error publishing your stream");
-              } else {
-                console.log("Stream published successfully");
-              }
-            });
-          }
+          console.log("Successfully connected to session");
         }
       });
     } catch (error) {
+      console.error("Failed to initialize video call:", error);
       toast.error("Failed to initialize video call");
       setIsLoading(false);
     }
@@ -147,34 +223,40 @@ export default function VideoCall({ sessionId, token }) {
     }
   };
 
-  // End call
-  const endCall = () => {
-    // Properly destroy publisher
-    if (publisherRef.current) {
-      publisherRef.current.destroy();
-      publisherRef.current = null;
-    }
+  // End call with proper cleanup
+  const endCall = async () => {
+    console.log("Ending call...");
 
-    // Disconnect session
-    if (sessionRef.current) {
-      sessionRef.current.disconnect();
-      sessionRef.current = null;
-    }
+    // Disable buttons to prevent multiple clicks
+    setIsLoading(true);
 
-    router.push("/appointments");
+    try {
+      await cleanupSession();
+
+      // Small delay to ensure cleanup is complete
+      setTimeout(() => {
+        router.push("/appointments");
+      }, 500);
+    } catch (error) {
+      console.error("Error ending call:", error);
+      router.push("/appointments");
+    }
   };
 
-  // Cleanup on unmount
+  // Cleanup on unmount with proper async handling
   useEffect(() => {
     return () => {
-      if (publisherRef.current) {
-        publisherRef.current.destroy();
-      }
-      if (sessionRef.current) {
-        sessionRef.current.disconnect();
-      }
+      console.log("Component unmounting, cleaning up...");
+      cleanupSession();
     };
   }, []);
+
+  // Reset cleanup flag when sessionId changes (for rejoining)
+  useEffect(() => {
+    isCleaningUpRef.current = false;
+    setIsLoading(true);
+    setIsConnected(false);
+  }, [sessionId, token]);
 
   if (!sessionId || !token || !appId) {
     return (
@@ -280,7 +362,7 @@ export default function VideoCall({ sessionId, token }) {
                     ? "border-emerald-900/30"
                     : "bg-red-900/20 border-red-900/30 text-red-400"
                 }`}
-                disabled={!publisherRef.current}
+                disabled={!publisherRef.current || isLoading}
               >
                 {isVideoEnabled ? <Video /> : <VideoOff />}
               </Button>
@@ -294,7 +376,7 @@ export default function VideoCall({ sessionId, token }) {
                     ? "border-emerald-900/30"
                     : "bg-red-900/20 border-red-900/30 text-red-400"
                 }`}
-                disabled={!publisherRef.current}
+                disabled={!publisherRef.current || isLoading}
               >
                 {isAudioEnabled ? <Mic /> : <MicOff />}
               </Button>
@@ -304,8 +386,13 @@ export default function VideoCall({ sessionId, token }) {
                 size="lg"
                 onClick={endCall}
                 className="rounded-full p-4 h-14 w-14 bg-red-600 hover:bg-red-700"
+                disabled={isLoading}
               >
-                <PhoneOff />
+                {isLoading ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <PhoneOff />
+                )}
               </Button>
             </div>
 

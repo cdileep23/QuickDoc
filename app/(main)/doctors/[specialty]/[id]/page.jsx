@@ -9,7 +9,7 @@ const page = async({params}) => {
       const[doctorDat,slotsData]=await Promise.all([
         getDoctorById(id),getAvailableTimeSlots(id)
       ])
-     
+      console.log(slotsData)
       return <DoctorProfile doctor={doctorDat.doctor} availableSlots={slotsData.days||[]}/>
     } catch (error) {
       console.log(error)

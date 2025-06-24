@@ -10,15 +10,12 @@ import Link from "next/link";
 import React from "react";
 import { Button } from "./ui/button";
 import { Calendar, CreditCard, ShieldCheck, Stethoscope, User } from "lucide-react";
-import { checkAndAllocateCredits } from "@/actions/credits";
-import { Badge } from "./ui/badge";
+
 
 const Header = async() => {
  const user= await checkUser()
 
- if(user?.role==="PATIENT"){
- await checkAndAllocateCredits(user);
- }
+
 
   return (
     <header className="fixed top-0 w-full border-b backdrop-blur-md z-10 supports-[backdrop-filter]:bg-background/50">

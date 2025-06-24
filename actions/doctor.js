@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/prisma"
 import { auth } from "@clerk/nextjs/server"
+import { startOfDay } from "date-fns";
 import { revalidatePath } from "next/cache"
 import { date } from "zod";
 
@@ -109,6 +110,7 @@ export async function setAvailabilitySlots(formData) {
         status: "AVAILABLE",
       },
     });
+    console.log(newSlot)
 
     console.log("Stored IST times:", newStartIST, newEndIST);
 
@@ -150,13 +152,18 @@ export async function getDoctorAvailability(){
          if (!doctor) {
            throw new Error("Doctor Not Found");
          }
-         const availabilitySlots=await db.availability.findMany({
-            where:{
-                doctorId:doctor.id
-            },orderBy:{
-                startTime:'asc'
-            }
-         })
+         const availabilitySlots = await db.availability.findMany({
+           where: {
+             doctorId: doctor.id,
+             status:"AVAILABLE",
+             startTime: {
+               gte: startOfDay(new Date()),
+             },
+           },
+           orderBy: {
+             startTime: "asc",
+           },
+         });
        
          return {slots:availabilitySlots}
      } catch (error) {
@@ -352,12 +359,12 @@ export async function markAppointmentCompleted(formData) {
       throw new Error("Only schedules appointments can be marked as completed")
     }
     const now=new Date();
-    const appointmentEndTime=new date(appoinment.endTime);
+    const appointmentEndTime=new Date(appoinment.endTime);
     if(now<appointmentEndTime){
       throw new Error("Cannot mark appointment as completed before the schedules end time")
     }
 
-    const updateAppointment = await db.appoinment.update({
+    const updateAppointment = await db.appointment.update({
       where: {
         id: appointmentId,
       },
@@ -368,6 +375,7 @@ export async function markAppointmentCompleted(formData) {
     revalidatePath("/doctor");
     return {success:true,appoinment:updateAppointment}
   } catch (error) {
+    console.log(error)
     throw new Error("Failed to update Notes " + error.message);
   }
 }

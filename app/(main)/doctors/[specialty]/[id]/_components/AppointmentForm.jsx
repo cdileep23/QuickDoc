@@ -20,6 +20,7 @@ const AppointmentForm = ({doctorId, slot, onBack, onComplete}) => {
        formData.append("startTime", slot.startTime);
        formData.append("endTime", slot.endTime);
        formData.append("description", description);
+       formData.append("availabilityId", slot.availabilityId);
 
        // Submit booking using the function from useFetch
        await submitBooking(formData);

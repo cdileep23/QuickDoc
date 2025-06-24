@@ -3,7 +3,7 @@ import { db } from "@/lib/prisma"
 import { auth } from "@clerk/nextjs/server"
 import { Auth } from "@vonage/auth"
 import { Vonage } from "@vonage/server-sdk";
-import { addDays, format, isBefore, isEqual, addMinutes } from "date-fns";
+import { addDays, format, isBefore, isEqual, addMinutes, endOfDay, startOfDay } from "date-fns";
 import { revalidatePath } from "next/cache";
 
 const credentials = new Auth({
@@ -34,10 +34,19 @@ export async function getDoctorById(doctorId) {
 
 
 
+
+// Adjust import path as needed
+
+
+
+
+
+
+
 export async function getAvailableTimeSlots(doctorId) {
   try {
     // Validate doctor existence and verification
-    const doctor = await db.user.findFirst({
+    const doctor = await db.user.findUnique({
       where: {
         id: doctorId,
         role: "DOCTOR",
@@ -49,7 +58,7 @@ export async function getAvailableTimeSlots(doctorId) {
       throw new Error("Doctor not found or not verified");
     }
 
-    // Fetch availability
+    // Fetch a single availability record
     const availability = await db.availability.findFirst({
       where: {
         doctorId: doctor.id,
@@ -63,11 +72,10 @@ export async function getAvailableTimeSlots(doctorId) {
 
     // Get the next 4 days
     const now = new Date();
-    const days = [0, 1, 2, 3].map((offset) => addDays(now, offset));
+    const days = [now, addDays(now, 1), addDays(now, 2), addDays(now, 3)];
 
-    const lastDay = days[3];
-
-    // Fetch existing appointments within the range
+    // Fetch existing appointments for the doctor over the next 4 days
+    const lastDay = endOfDay(days[3]);
     const existingAppointments = await db.appointment.findMany({
       where: {
         doctorId: doctor.id,
@@ -80,14 +88,16 @@ export async function getAvailableTimeSlots(doctorId) {
 
     const availableSlotsByDay = {};
 
+    // For each of the next 4 days, generate available slots
     for (const day of days) {
       const dayString = format(day, "yyyy-MM-dd");
       availableSlotsByDay[dayString] = [];
 
+      // Create a copy of the availability start/end times for this day
       const availabilityStart = new Date(availability.startTime);
       const availabilityEnd = new Date(availability.endTime);
 
-      // Set the date portion
+      // Set the day to the current day we're processing
       availabilityStart.setFullYear(
         day.getFullYear(),
         day.getMonth(),
@@ -102,7 +112,10 @@ export async function getAvailableTimeSlots(doctorId) {
       let current = new Date(availabilityStart);
       const end = new Date(availabilityEnd);
 
-      while (isBefore(current, end) || isEqual(current, end)) {
+      while (
+        isBefore(addMinutes(current, 30), end) ||
+        +addMinutes(current, 30) === +end
+      ) {
         const next = addMinutes(current, 30);
 
         // Skip past slots
@@ -122,7 +135,7 @@ export async function getAvailableTimeSlots(doctorId) {
           );
         });
 
-        if ((!overlaps && isBefore(next, end)) || isEqual(next, end)) {
+        if (!overlaps) {
           availableSlotsByDay[dayString].push({
             startTime: current.toISOString(),
             endTime: next.toISOString(),
@@ -138,6 +151,7 @@ export async function getAvailableTimeSlots(doctorId) {
       }
     }
 
+    // Convert to array of slots grouped by day for easier consumption by the UI
     const result = Object.entries(availableSlotsByDay).map(([date, slots]) => ({
       date,
       displayDate:
@@ -153,6 +167,7 @@ export async function getAvailableTimeSlots(doctorId) {
     throw new Error("Failed to fetch available time slots: " + error.message);
   }
 }
+
 
 
 export async function bookAppointment(formData) {
@@ -199,8 +214,6 @@ export async function bookAppointment(formData) {
       throw new Error("Doctor not found or not verified");
     }
 
-   
-   
 
     // Check if the requested time slot is available
     const overlappingAppointment = await db.appointment.findFirst({
@@ -249,7 +262,6 @@ export async function bookAppointment(formData) {
     // Deduct credits from patient and add to doctor
    
 
-
     // Create the appointment with the video session ID
     const appointment = await db.appointment.create({
       data: {
@@ -270,6 +282,9 @@ export async function bookAppointment(formData) {
     throw new Error("Failed to book appointment:" + error.message);
   }
 }
+
+
+
 async function createVideoSession() {
   try {
     const session = await vonage.video.createSession({ mediaMode: "routed" });
@@ -279,65 +294,88 @@ async function createVideoSession() {
   }
 }
 export async function generateVideoToken(formData) {
-  const{userId} =await auth()
+  const { userId } = await auth();
+
   try {
-    const user=await db.user.findUnique({
-      where:{
-        clerkUserId:userId
-      }
-    })
-    if(!userId){
+    const user = await db.user.findUnique({
+      where: {
+        clerkUserId: userId,
+      },
+    });
+
+    if (!userId) {
       throw new Error("User Not Found");
     }
-    const appointmentId=formData.get("appointmentId");
-    const appoinment=await db.appointment.findUnique({
-      where:{
-        id:appointmentId
-      }
-    })
-    if(!appoinment){
-      throw new Error("Appointment Not Found")
-    }
-    if (appoinment.doctorId !== user.id && appoinment.patientId !== user.id) {
-      throw new Error("Ypu are not authorized to join the appointment");
-    }
-    if(appoinment.status!=="SCHEDULED"){
-      throw new Error("This appointment is not currently scheduled")
-    }
-    const now =new Date()
-    const appoinmentStartime=new Date(appoinment.startTime);
-    const timeDiff=(appoinmentStartime-now)/(1000*60)
-    if(timeDiff>30 ){
-      throw new Error("The Call will be available 30 min before the schedules time")
-    }
-    const appointmentEndTime=new Date(appoinment.endTime)
-    const expirationTime=Math.floor(appointmentEndTime.getTime()/1000)+60*60
-    const connectionData=JSON.stringify({
-      name:user.name,
-      role:user.role,
-      userId:user.id
-    })
-  const token=  vonage.video.generateClientToken(appoinment.videoSessionId,{
-      role:"publisher",
-      expireTime:expirationTime,
-      data:connectionData
-    })
-    await db.appointment.update({
-      where:{
-        id:appointmentId
+
+    const appointmentId = formData.get("appointmentId");
+    const appointment = await db.appointment.findUnique({
+      where: {
+        id: appointmentId,
       },
-      data:{
-        videoSessionToken:token
-      }
-    })
+    });
+
+    if (!appointment) {
+      throw new Error("Appointment Not Found");
+    }
+
+    if (appointment.doctorId !== user.id && appointment.patientId !== user.id) {
+      throw new Error("You are not authorized to join the appointment");
+    }
+
+    if (appointment.status !== "SCHEDULED") {
+      throw new Error("This appointment is not currently scheduled");
+    }
+
+    const now = new Date();
+    const appointmentStartTime = new Date(appointment.startTime);
+    const timeDiff = (appointmentStartTime - now) / (1000 * 60);
+
+    if (timeDiff > 30) {
+      throw new Error(
+        "The Call will be available 30 min before the scheduled time"
+      );
+    }
+
+    const appointmentEndTime = new Date(appointment.endTime);
+    const expirationTime =
+      Math.floor(appointmentEndTime.getTime() / 1000) + 60 * 60;
+
+    const connectionData = JSON.stringify({
+      name: user.name,
+      role: user.role,
+      userId: user.id,
+    });
+
+    // Create video session if it doesn't exist
+    let videoSessionId = appointment.videoSessionId;
+    if (!videoSessionId) {
+      videoSessionId = await createVideoSession();
+
+      // Update appointment with the session ID (only once)
+      await db.appointment.update({
+        where: {
+          id: appointmentId,
+        },
+        data: {
+          videoSessionId: videoSessionId,
+        },
+      });
+    }
+
+    // ALWAYS generate a fresh token - don't store it in DB
+    const token = vonage.video.generateClientToken(videoSessionId, {
+      role: "publisher",
+      expireTime: expirationTime,
+      data: connectionData,
+    });
+
     return {
       success: true,
-      videoSessionId: appoinment.videoSessionId,
-      token,
+      videoSessionId: videoSessionId,
+      token: token, // Fresh token every time
     };
   } catch (error) {
-    throw new Error("Failed to generate Video Token"+ error.message)
+    throw new Error("Failed to generate Video Token: " + error.message);
   }
-  
 }
     

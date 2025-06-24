@@ -27,7 +27,7 @@ const PickSlot = ({ days, onSelectedSlot }) => {
             <TabsTrigger
               key={day.date}
               value={day.date}
-              disabled={day.slots.length === 0}
+      
               className={`shrink-0 px-4 py-2 rounded-md border ${
                 day.slots.length === 0
                   ? "opacity-50 cursor-not-allowed bg-gray-100"
